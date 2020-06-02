@@ -20,7 +20,7 @@ defmodule James.Application do
          name: James.Message.Processor
        ]},
       {James.Session.Registry, []},
-      {James.Event.Machine, []}
+      {James.Reminder.Storage, []}
     ]
 
     opts = [strategy: :one_for_one, name: James.Supervisor]

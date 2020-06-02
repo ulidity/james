@@ -2,7 +2,6 @@ defmodule James.Message do
   require Logger
 
   alias James.Session
-  alias James.Error
 
   def process(msg) do
     Task.Supervisor.start_child(
@@ -21,11 +20,16 @@ defmodule James.Message do
 
     case data do
       %{"text" => msg} ->
-        Session.respond(chat_id, msg)
+        :ok = Session.process_message(chat_id, msg, lang)
 
       _ ->
-        error_msg = Error.message("WRONG_MESSAGE_TYPE", lang)
-        Session.respond(chat_id, error_msg)
+        :ok =
+          Session.send_message(
+            :external,
+            chat_id,
+            "WRONG_MESSAGE_TYPE",
+            lang
+          )
     end
   end
 
