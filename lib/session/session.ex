@@ -7,14 +7,12 @@ defmodule James.Session.Context do
   typedstruct do
     field(:chat_id, pos_integer(), enforce: true)
     field(:conn, Mint.Http.t(), enforce: true)
-    field(:timeout, pos_integer(), enforce: true)
-    field(:reminder, Reminder.t(), enforce: true)
+    field(:reminder, Reminder.t())
+    field(:timer, reference())
   end
 
   def new(chat_id, conn) do
-    {:ok, timeout} = Confex.fetch_env(:james, :session_timeout)
-
-    %Context{chat_id: chat_id, conn: conn, timeout: timeout, reminder: Reminder.empty()}
+    %Context{chat_id: chat_id, conn: conn}
   end
 end
 
@@ -44,7 +42,7 @@ defmodule James.Session do
   def init([chat_id]) do
     {:ok, conn} = connect()
     context = Context.new(chat_id, conn)
-    {:ok, @state_awaiting_command, context, context.timeout}
+    {:ok, @state_awaiting_command, set_timer(context)}
   end
 
   def handle_event(:cast, {:process_message, msg, lang}, @state_awaiting_command = state, context) do
@@ -52,11 +50,13 @@ defmodule James.Session do
       true ->
         {:ok, next_state, reply_msg} = process_command(msg)
         :ok = send_message(:internal, self(), reply_msg, lang)
-        {:next_state, next_state, %Context{context | reminder: Reminder.empty()}}
+        new_context = %Context{context | reminder: Reminder.empty()}
+        {:next_state, next_state, set_timer(new_context)}
 
       false ->
         :ok = send_message(:internal, self(), "NOT_A_COMMAND", lang)
-        {:next_state, state, %Context{context | reminder: Reminder.empty()}}
+        new_context = %Context{context | reminder: Reminder.empty()}
+        {:next_state, state, set_timer(new_context)}
     end
   end
 
@@ -70,14 +70,14 @@ defmodule James.Session do
       true ->
         {:ok, next_state, reply_msg} = process_command(msg)
         :ok = send_message(:internal, self(), reply_msg, lang)
-        {:next_state, next_state, %Context{context | reminder: Reminder.empty()}}
+        new_context = %Context{context | reminder: Reminder.empty()}
+        {:next_state, next_state, set_timer(new_context)}
 
       false ->
         :ok = send_message(:internal, self(), "ENTER_REMINDER_TIMEOUT", lang)
         updated_reminder = Reminder.with_title(context.reminder, msg)
-
-        {:next_state, @state_awaiting_reminder_timeout,
-         %Context{context | reminder: updated_reminder}}
+        new_context = %Context{context | reminder: updated_reminder}
+        {:next_state, @state_awaiting_reminder_timeout, set_timer(new_context)}
     end
   end
 
@@ -91,7 +91,8 @@ defmodule James.Session do
       true ->
         {:ok, next_state, reply_msg} = process_command(msg)
         :ok = send_message(:internal, self(), reply_msg, lang)
-        {:next_state, next_state, %Context{context | reminder: Reminder.empty()}}
+        new_context = %Context{context | reminder: Reminder.empty()}
+        {:next_state, next_state, set_timer(new_context)}
 
       false ->
         case get_timeout(msg) do
@@ -103,7 +104,7 @@ defmodule James.Session do
 
           :error ->
             :ok = send_message(:internal, self(), "INVALID_REMINDER_TIMEOUT", lang)
-            {:next_state, state, context}
+            {:next_state, state, set_timer(context)}
         end
     end
   end
@@ -126,7 +127,7 @@ defmodule James.Session do
     {:next_state, state, %Context{context | conn: new_conn}}
   end
 
-  def handle_event(:timeout, _event, state, context) do
+  def handle_event(:info, :timeout, state, context) do
     Logger.warn("Session for chat #{context.chat_id} expired. State: #{state}")
     {:stop, :normal, context}
   end
@@ -237,6 +238,18 @@ defmodule James.Session do
 
   def terminate(_reason, _state, context) do
     {:ok, _conn} = Mint.HTTP.close(context.conn)
+  end
+
+  def set_timer(context) do
+    {:ok, timeout} = Confex.fetch_env(:james, :session_timeout)
+
+    unless context.timer == nil do
+      Process.cancel_timer(context.timer)
+    end
+
+    timer = Process.send_after(self(), :timeout, timeout)
+
+    %Context{context | timer: timer}
   end
 
   def child_spec(chat_id) do

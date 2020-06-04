@@ -18,6 +18,8 @@ defmodule James.Message do
     %{"chat" => %{"id" => chat_id}} = data
     %{"from" => %{"language_code" => lang}} = data
 
+    chat_id = to_string(chat_id)
+
     case data do
       %{"text" => msg} ->
         :ok = Session.process_message(chat_id, msg, lang)
