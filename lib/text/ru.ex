@@ -26,6 +26,18 @@ defmodule James.Text.RU do
     "Неверный формат"
   end
 
+  def message("WELCOME") do
+    "Приветствую"
+  end
+
+  def message("REMINDER_CREATION_CANCELED") do
+    "Отмена"
+  end
+
+  def message("COMMAND_NOT_APPLICABLE") do
+    "Команда не может быть применена"
+  end
+
   def message("REMINDER", data) do
     "Напоминаю!\n#{data[:title]}"
   end

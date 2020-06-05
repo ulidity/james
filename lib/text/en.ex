@@ -27,6 +27,18 @@ defmodule James.Text.EN do
     "Wrong format"
   end
 
+  def message("WELCOME") do
+    "Welcome"
+  end
+
+  def message("REMINDER_CREATION_CANCELED") do
+    "Canceled"
+  end
+
+  def message("COMMAND_NOT_APPLICABLE") do
+    "Comman is not applicable"
+  end
+
   def message("REMINDER", data) do
     "Reminding!\n#{data[:title]}"
   end

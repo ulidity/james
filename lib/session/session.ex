@@ -31,7 +31,15 @@ defmodule James.Session do
   @state_awaiting_reminder_title :awaiting_reminder_title
   @state_awaiting_reminder_timeout :awaiting_reminder_timeout
 
+  @command_start "/start"
   @command_new "/new"
+  @command_cancel "/cancel"
+
+  @applicable_commands %{
+    @state_awaiting_command => [@command_new, @command_start],
+    @state_awaiting_reminder_title => [@command_new, @command_cancel],
+    @state_awaiting_reminder_timeout => [@command_new, @command_cancel]
+  }
 
   @timeout_regex ~r/^\s*((?<days>\d+)[dD])?\s*((?<hours>\d+)[hH])?\s*((?<minutes>\d+)[mM])?\s*((?<seconds>\d+)[sS])?$/
 
@@ -48,10 +56,16 @@ defmodule James.Session do
   def handle_event(:cast, {:process_message, msg, lang}, @state_awaiting_command = state, context) do
     case command?(msg) do
       true ->
-        {:ok, next_state, reply_msg} = process_command(msg)
-        :ok = send_message(:internal, self(), reply_msg, lang)
-        new_context = %Context{context | reminder: Reminder.empty()}
-        {:next_state, next_state, set_timer(new_context)}
+        case process_command(msg, state) do
+          {:ok, next_state, reply_msg} ->
+            :ok = send_message(:internal, self(), reply_msg, lang)
+            new_context = %Context{context | reminder: Reminder.empty()}
+            {:next_state, next_state, set_timer(new_context)}
+
+          {:error, :not_applicable} ->
+            :ok = send_message(:internal, self(), "COMMAND_NOT_APPLICABLE", lang)
+            {:next_state, state, set_timer(context)}
+        end
 
       false ->
         :ok = send_message(:internal, self(), "NOT_A_COMMAND", lang)
@@ -63,15 +77,21 @@ defmodule James.Session do
   def handle_event(
         :cast,
         {:process_message, msg, lang},
-        @state_awaiting_reminder_title,
+        @state_awaiting_reminder_title = state,
         context
       ) do
     case command?(msg) do
       true ->
-        {:ok, next_state, reply_msg} = process_command(msg)
-        :ok = send_message(:internal, self(), reply_msg, lang)
-        new_context = %Context{context | reminder: Reminder.empty()}
-        {:next_state, next_state, set_timer(new_context)}
+        case process_command(msg, state) do
+          {:ok, next_state, reply_msg} ->
+            :ok = send_message(:internal, self(), reply_msg, lang)
+            new_context = %Context{context | reminder: Reminder.empty()}
+            {:next_state, next_state, set_timer(new_context)}
+
+          {:error, :not_applicable} ->
+            :ok = send_message(:internal, self(), "COMMAND_NOT_APPLICABLE", lang)
+            {:next_state, state, set_timer(context)}
+        end
 
       false ->
         :ok = send_message(:internal, self(), "ENTER_REMINDER_TIMEOUT", lang)
@@ -89,10 +109,16 @@ defmodule James.Session do
       ) do
     case command?(msg) do
       true ->
-        {:ok, next_state, reply_msg} = process_command(msg)
-        :ok = send_message(:internal, self(), reply_msg, lang)
-        new_context = %Context{context | reminder: Reminder.empty()}
-        {:next_state, next_state, set_timer(new_context)}
+        case process_command(msg, state) do
+          {:ok, next_state, reply_msg} ->
+            :ok = send_message(:internal, self(), reply_msg, lang)
+            new_context = %Context{context | reminder: Reminder.empty()}
+            {:next_state, next_state, set_timer(new_context)}
+
+          {:error, :not_applicable} ->
+            :ok = send_message(:internal, self(), "COMMAND_NOT_APPLICABLE", lang)
+            {:next_state, state, set_timer(context)}
+        end
 
       false ->
         case get_timeout(msg) do
@@ -196,11 +222,33 @@ defmodule James.Session do
     {:ok, data}
   end
 
-  defp process_command(@command_new) do
-    {:ok, @state_awaiting_reminder_title, "ENTER_REMINDER_TITLE"}
+  defp process_command(@command_start = command, state) do
+    if command in @applicable_commands[state] do
+      {:ok, @state_awaiting_command, "WELCOME"}
+    else
+      {:error, :not_applicable}
+    end
   end
 
+  defp process_command(@command_new = command, state) do
+    if command in @applicable_commands[state] do
+      {:ok, @state_awaiting_reminder_title, "ENTER_REMINDER_TITLE"}
+    else
+      {:error, :not_applicable}
+    end
+  end
+
+  defp process_command(@command_cancel = command, state) do
+    if command in @applicable_commands[state] do
+      {:ok, @state_awaiting_command, "REMINDER_CREATION_CANCELED"}
+    else
+      {:error, :not_applicable}
+    end
+  end
+
+  def command?(@command_start), do: true
   def command?(@command_new), do: true
+  def command?(@command_cancel), do: true
   def command?(_), do: false
 
   defp get_timeout(msg) do
