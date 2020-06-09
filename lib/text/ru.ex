@@ -1,44 +1,67 @@
 defmodule James.Text.RU do
-  def message("WRONG_MESSAGE_TYPE") do
-    Enum.random([
-      "Поалуйста, введите тестковое сообщение",
-      "К сожалению, я понимаю только текст"
-    ])
-  end
+  use James.Text
 
-  def message("NOT_A_COMMAND") do
-    "Пожалуйста, введите команду"
-  end
+  defmsg(:INVALID_MESSAGE_TYPE, [
+    """
+    Поалуйста, введите тестковое сообщение
+    """,
+    """
+    К сожалению, я понимаю только текст
+    """
+  ])
 
-  def message("ENTER_REMINDER_TITLE") do
-    "О чем вам напомнить?"
-  end
+  defmsg(:INVALID_COMMAND, [
+    """
+    Пожалуйста, введите команду
+    """
+  ])
 
-  def message("ENTER_REMINDER_TIMEOUT") do
-    "Через какое время вам об этом напомнить?"
-  end
+  defmsg(:ENTER_REMINDER_TITLE, [
+    """
+    О чем вам напомнить?
+    """
+  ])
 
-  def message("REMINDER_CREATED") do
-    "Отлично! Обязательно напомню!"
-  end
+  defmsg(:ENTER_REMINDER_TIMEOUT, [
+    """
+    Через какое время вам об этом напомнить?
+    """
+  ])
 
-  def message("INVALID_REMINDER_TIMEOUT") do
-    "Неверный формат"
-  end
+  defmsg(:REMINDER_CREATED, [
+    """
+    Отлично! Обязательно напомню!
+    """
+  ])
 
-  def message("WELCOME") do
-    "Приветствую"
-  end
+  defmsg(:INVALID_REMINDER_TIMEOUT, [
+    """
+    Неверный формат
+    """
+  ])
 
-  def message("REMINDER_CREATION_CANCELED") do
-    "Отмена"
-  end
+  defmsg(:COMMAND_CANCELED, [
+    """
+    Отмена
+    """
+  ])
 
-  def message("COMMAND_NOT_APPLICABLE") do
-    "Команда не может быть применена"
-  end
+  defmsg(:COMMAND_NOT_APPLICABLE, [
+    """
+    Команда не может быть применена
+    """
+  ])
 
-  def message("REMINDER", data) do
-    "Напоминаю!\n#{data[:title]}"
-  end
+  defmsg(:REMINDER, [
+    """
+    Напоминаю!
+    <%= reminder %>
+    """
+  ])
+
+  defmsg(:WELCOME, [
+    """
+    Добро пожаловать!
+    """
+  ])
 end

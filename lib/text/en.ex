@@ -1,45 +1,70 @@
 defmodule James.Text.EN do
-  def message("WRONG_MESSAGE_TYPE") do
-    Enum.random([
-      "Sorry. I can only inderstand text messages",
-      "Unfortunately i only understand text",
-      "Please try entering a text message"
-    ])
-  end
+  use James.Text
 
-  def message("NOT_A_COMMAND") do
-    "Please, enter a valid command"
-  end
+  defmsg(:INVALID_MESSAGE_TYPE, [
+    """
+    Sorry. I can only inderstand text messages
+    """,
+    """
+    Unfortunately i only understand text
+    """,
+    """
+    Please try entering a text message
+    """
+  ])
 
-  def message("ENTER_REMINDER_TITLE") do
-    "What should i remind you about?"
-  end
+  defmsg(:INVALID_COMMAND, [
+    """
+    Please, enter a valid command
+    """
+  ])
 
-  def message("ENTER_REMINDER_TIMEOUT") do
-    "In how much time should i do that?"
-  end
+  defmsg(:ENTER_REMINDER_TITLE, [
+    """
+    What should i remind you about?
+    """
+  ])
 
-  def message("REMINDER_CREATED") do
-    "Great! You'll be reminded!"
-  end
+  defmsg(:ENTER_REMINDER_TIMEOUT, [
+    """
+    In how much time should i do that?
+    """
+  ])
 
-  def message("INVALID_REMINDER_TIMEOUT") do
-    "Wrong format"
-  end
+  defmsg(:REMINDER_CREATED, [
+    """
+    Great! You'll be reminded!
+    """
+  ])
 
-  def message("WELCOME") do
-    "Welcome"
-  end
+  defmsg(:INVALID_REMINDER_TIMEOUT, [
+    """
+    Wrong format
+    """
+  ])
 
-  def message("REMINDER_CREATION_CANCELED") do
-    "Canceled"
-  end
+  defmsg(:WELCOME, [
+    """
+    Welcome
+    """
+  ])
 
-  def message("COMMAND_NOT_APPLICABLE") do
-    "Comman is not applicable"
-  end
+  defmsg(:COMMAND_CANCELED, [
+    """
+    Canceled
+    """
+  ])
 
-  def message("REMINDER", data) do
-    "Reminding!\n#{data[:title]}"
-  end
+  defmsg(:COMMAND_NOT_APPLICABLE, [
+    """
+    Comman is not applicable
+    """
+  ])
+
+  defmsg(:REMINDER, [
+    """
+    Reminding!
+    <%= reminder %>
+    """
+  ])
 end
