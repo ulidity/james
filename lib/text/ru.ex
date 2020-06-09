@@ -12,7 +12,14 @@ defmodule James.Text.RU do
 
   defmsg(:INVALID_COMMAND, [
     """
-    Пожалуйста, введите команду
+    __*Ошибка*__: Неверная команда
+
+    *Подсказка*:
+    ```
+    Введите одну из предложенных команд.
+    ```
+    /new \\- создать новое напоминание
+    /cancel \\- отменить текущую команду
     """
   ])
 
@@ -31,6 +38,18 @@ defmodule James.Text.RU do
   defmsg(:REMINDER_CREATED, [
     """
     Отлично Обязательно напомню
+    """
+  ])
+
+  defmsg(:REMINDER_COMPLETED, [
+    """
+    Reminder completed
+    """
+  ])
+
+  defmsg(:REMINDER_ALREADY_COMPLETED, [
+    """
+    Reminder already completed
     """
   ])
 
@@ -91,4 +110,6 @@ defmodule James.Text.RU do
     Добро пожаловать
     """
   ])
+
+  defmsg(:BUTTON_CONFIRM_REMINDER_COMPLETION, ["Готово!"])
 end

@@ -15,7 +15,14 @@ defmodule James.Text.EN do
 
   defmsg(:INVALID_COMMAND, [
     """
-    Please, enter a valid command
+    __*Error*__: Invalid command
+
+    *Hint*:
+    ```
+    Enter one of the following commands
+    ```
+    /new \\- create new reminder
+    /cancel \\- cancel current command
     """
   ])
 
@@ -34,6 +41,18 @@ defmodule James.Text.EN do
   defmsg(:REMINDER_CREATED, [
     """
     Great You'll be reminded
+    """
+  ])
+
+  defmsg(:REMINDER_COMPLETED, [
+    """
+    Задача выполнена
+    """
+  ])
+
+  defmsg(:REMINDER_ALREADY_COMPLETED, [
+    """
+    Задача уже была выполнена
     """
   ])
 
@@ -94,4 +113,6 @@ defmodule James.Text.EN do
     ```
     """
   ])
+
+  defmsg(:BUTTON_CONFIRM_REMINDER_COMPLETION, ["Done!"])
 end

@@ -70,19 +70,22 @@ defmodule James.Text do
       :INVALID_REMINDER_TIMEOUT,
       :COMMAND_NOT_APPLICABLE,
       :REMINDER_CREATED,
-      :REMINDER
+      :REMINDER_ALREADY_COMPLETED,
+      :REMINDER_COMPLETED,
+      :REMINDER,
+      :BUTTON_CONFIRM_REMINDER_COMPLETION
     ]
 
   def message({code, data}, lang) do
     mod = get_mod(lang)
 
-    {:ok, apply(mod, :message, [code, data])}
+    apply(mod, :message, [code, data])
   end
 
   def message(code, lang) do
     mod = get_mod(lang)
 
-    {:ok, apply(mod, :message, [code])}
+    apply(mod, :message, [code])
   end
 
   def get_mod("en"), do: EN

@@ -29,6 +29,10 @@ defmodule James.Session do
 
   @parse_mode "MarkdownV2"
 
+  @button_confirm_reminder_completion :confirm_reminder_completion
+
+  # @button_remind_later :remind_later
+
   @state_awaiting_command :awaiting_command
   @state_awaiting_reminder_title :awaiting_reminder_title
   @state_awaiting_reminder_timeout :awaiting_reminder_timeout
@@ -36,11 +40,24 @@ defmodule James.Session do
   @command_start "/start"
   @command_new "/new"
   @command_cancel "/cancel"
+  @command_confirm_reminder_completion "/confirm_reminder_completion"
 
   @applicable_commands %{
-    @state_awaiting_command => [@command_new, @command_start],
-    @state_awaiting_reminder_title => [@command_new, @command_cancel],
-    @state_awaiting_reminder_timeout => [@command_new, @command_cancel]
+    @state_awaiting_command => [
+      @command_new,
+      @command_start,
+      @command_confirm_reminder_completion
+    ],
+    @state_awaiting_reminder_title => [
+      @command_new,
+      @command_cancel,
+      @command_confirm_reminder_completion
+    ],
+    @state_awaiting_reminder_timeout => [
+      @command_new,
+      @command_cancel,
+      @command_confirm_reminder_completion
+    ]
   }
 
   @timeout_regex ~r/^\s*((?<days>\d+)[dD])?\s*((?<hours>\d+)[hH])?\s*((?<minutes>\d+)[mM])?\s*((?<seconds>\d+)[sS])?$/
@@ -65,12 +82,12 @@ defmodule James.Session do
             {:next_state, next_state, set_timer(new_context)}
 
           {:error, :not_applicable} ->
-            :ok = send_message(:internal, self(), James.Text.Codes.command_not_applicable(), lang)
+            :ok = send_message(:internal, self(), Text.Codes.command_not_applicable(), lang)
             {:next_state, state, set_timer(context)}
         end
 
       false ->
-        :ok = send_message(:internal, self(), James.Text.Codes.invalid_command(), lang)
+        :ok = send_message(:internal, self(), Text.Codes.invalid_command(), lang)
         new_context = %Context{context | reminder: Reminder.empty()}
         {:next_state, state, set_timer(new_context)}
     end
@@ -91,12 +108,12 @@ defmodule James.Session do
             {:next_state, next_state, set_timer(new_context)}
 
           {:error, :not_applicable} ->
-            :ok = send_message(:internal, self(), James.Text.Codes.command_not_applicable(), lang)
+            :ok = send_message(:internal, self(), Text.Codes.command_not_applicable(), lang)
             {:next_state, state, set_timer(context)}
         end
 
       false ->
-        :ok = send_message(:internal, self(), James.Text.Codes.enter_reminder_timeout(), lang)
+        :ok = send_message(:internal, self(), Text.Codes.enter_reminder_timeout(), lang)
         updated_reminder = Reminder.with_title(context.reminder, msg)
         new_context = %Context{context | reminder: updated_reminder}
         {:next_state, @state_awaiting_reminder_timeout, set_timer(new_context)}
@@ -118,29 +135,28 @@ defmodule James.Session do
             {:next_state, next_state, set_timer(new_context)}
 
           {:error, :not_applicable} ->
-            :ok = send_message(:internal, self(), James.Text.Codes.command_not_applicable(), lang)
+            :ok = send_message(:internal, self(), Text.Codes.command_not_applicable(), lang)
             {:next_state, state, set_timer(context)}
         end
 
       false ->
         case get_timeout(msg) do
           {:ok, timeout} ->
-            :ok = send_message(:internal, self(), James.Text.Codes.reminder_created(), lang)
+            :ok = send_message(:internal, self(), Text.Codes.reminder_created(), lang)
             updated_reminder = Reminder.with_timeout(context.reminder, timeout)
             :ok = Reminder.Storage.set_reminder(updated_reminder, context.chat_id, lang)
             {:next_state, @state_awaiting_command, %Context{context | reminder: Reminder.empty()}}
 
           :error ->
-            :ok =
-              send_message(:internal, self(), James.Text.Codes.invalid_reminder_timeout(), lang)
+            :ok = send_message(:internal, self(), Text.Codes.invalid_reminder_timeout(), lang)
 
             {:next_state, state, set_timer(context)}
         end
     end
   end
 
-  def handle_event(:cast, {:send_message, msg, lang}, state, context) do
-    {:ok, new_conn} = do_send_message(context.conn, context.chat_id, msg, lang)
+  def handle_event(:cast, {:send_message, msg, lang, buttons}, state, context) do
+    {:ok, new_conn} = do_send_message(context.conn, context.chat_id, msg, lang, buttons)
     {:next_state, state, %Context{context | conn: new_conn}}
   end
 
@@ -175,24 +191,25 @@ defmodule James.Session do
     :ok = GenStateMachine.cast(pid, {:process_message, msg, lang})
   end
 
-  def send_message(:external, chat_id, msg, lang) do
+  def send_message(type, chat_id, msg, lang, buttons \\ [])
+
+  def send_message(:external, chat_id, msg, lang, buttons) do
     {:ok, pid} = Registry.get_session(chat_id)
-    :ok = GenStateMachine.cast(pid, {:send_message, msg, lang})
+    :ok = GenStateMachine.cast(pid, {:send_message, msg, lang, buttons})
   end
 
-  def send_message(:internal, pid, msg, lang) do
-    :ok = GenStateMachine.cast(pid, {:send_message, msg, lang})
+  def send_message(:internal, pid, msg, lang, buttons) do
+    :ok = GenStateMachine.cast(pid, {:send_message, msg, lang, buttons})
   end
 
-  defp do_send_message(conn, chat_id, msg, lang) do
-    {:ok, msg} = Text.message(msg, lang)
-
+  defp do_send_message(conn, chat_id, msg, lang, buttons) do
     body =
       %{
         "chat_id" => chat_id,
-        "text" => msg,
+        "text" => Text.message(msg, lang),
         "parse_mode" => @parse_mode
       }
+      |> add_message_buttons(buttons)
       |> Jason.encode!()
 
     {:ok, new_conn, _req_ref} =
@@ -208,6 +225,23 @@ defmodule James.Session do
 
     {:ok, new_conn}
   end
+
+  defp add_message_buttons(body, []), do: body
+
+  defp add_message_buttons(body, buttons) do
+    Map.put(body, "reply_markup", %{
+      "inline_keyboard" =>
+        Enum.map(buttons, fn {code, data} ->
+          [get_button_layout(code, data)]
+        end)
+    })
+  end
+
+  defp get_button_layout(@button_confirm_reminder_completion, id: id, lang: lang),
+    do: %{
+      "text" => Text.message(Text.Codes.button_confirm_reminder_completion(), lang),
+      "callback_data" => @command_confirm_reminder_completion <> id
+    }
 
   defp url_path(path) do
     {:ok, api_token} = Confex.fetch_env(:james, :api_token)
@@ -234,7 +268,7 @@ defmodule James.Session do
 
   defp process_command(@command_start = command, state) do
     if command in @applicable_commands[state] do
-      {:ok, @state_awaiting_command, James.Text.Codes.welcome()}
+      {:ok, @state_awaiting_command, Text.Codes.welcome()}
     else
       {:error, :not_applicable}
     end
@@ -242,7 +276,7 @@ defmodule James.Session do
 
   defp process_command(@command_new = command, state) do
     if command in @applicable_commands[state] do
-      {:ok, @state_awaiting_reminder_title, James.Text.Codes.enter_reminder_title()}
+      {:ok, @state_awaiting_reminder_title, Text.Codes.enter_reminder_title()}
     else
       {:error, :not_applicable}
     end
@@ -250,7 +284,21 @@ defmodule James.Session do
 
   defp process_command(@command_cancel = command, state) do
     if command in @applicable_commands[state] do
-      {:ok, @state_awaiting_command, James.Text.Codes.command_canceled()}
+      {:ok, @state_awaiting_command, Text.Codes.command_canceled()}
+    else
+      {:error, :not_applicable}
+    end
+  end
+
+  defp process_command(@command_confirm_reminder_completion <> reminder_id, state) do
+    if @command_confirm_reminder_completion in @applicable_commands[state] do
+      case Reminder.Storage.remove_reminder(reminder_id) do
+        :ok ->
+          {:ok, @state_awaiting_command, Text.Codes.reminder_completed()}
+
+        {:error, :not_found} ->
+          {:ok, @state_awaiting_command, Text.Codes.reminder_already_completed()}
+      end
     else
       {:error, :not_applicable}
     end
@@ -259,6 +307,7 @@ defmodule James.Session do
   def command?(@command_start), do: true
   def command?(@command_new), do: true
   def command?(@command_cancel), do: true
+  def command?(@command_confirm_reminder_completion <> _id), do: true
   def command?(_), do: false
 
   defp get_timeout(msg) do

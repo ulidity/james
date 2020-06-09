@@ -39,12 +39,26 @@ defmodule James.Reminder.Storage do
   end
 
   def set_reminder(reminder, chat_id, lang) do
-    :ok = GenServer.call(__MODULE__, {:set_reminder, reminder, chat_id, lang})
+    GenServer.call(__MODULE__, {:set_reminder, reminder, chat_id, lang})
+  end
+
+  def remove_reminder(id) do
+    GenServer.call(__MODULE__, {:remove_reminder, id})
   end
 
   def handle_call({:set_reminder, reminder, chat_id, lang}, _from, state) do
     do_set_reminder(state.conn, reminder, chat_id, lang)
     {:reply, :ok, state}
+  end
+
+  def handle_call({:remove_reminder, id}, _from, state) do
+    case do_remove_reminder(state.conn, id) do
+      :ok ->
+        {:reply, :ok, state}
+
+      {:error, _error} = error ->
+        {:reply, error, state}
+    end
   end
 
   def handle_info({:redix_pubsub, _pubsub, _ref, :pmessage, %{payload: id}}, state) do
@@ -57,7 +71,8 @@ defmodule James.Reminder.Storage do
         :external,
         chat_id,
         {James.Text.Codes.reminder(), [reminder: reminder]},
-        lang
+        lang,
+        [{:confirm_reminder_completion, [id: id, lang: lang]}]
       )
 
     {:noreply, state}
@@ -85,6 +100,20 @@ defmodule James.Reminder.Storage do
     {:ok, lang} = Redix.command(conn, ["GET", "#{id}:#{@key_lang}"])
 
     {:ok, reminder, chat_id, lang}
+  end
+
+  defp do_remove_reminder(conn, id) do
+    case Redix.command(conn, ["DEL", id]) do
+      {:ok, 1} ->
+        {:ok, 1} = Redix.command(conn, ["DEL", "#{id}:#{@key_reminder}"])
+        {:ok, 1} = Redix.command(conn, ["DEL", "#{id}:#{@key_chat_id}"])
+        {:ok, 1} = Redix.command(conn, ["DEL", "#{id}:#{@key_lang}"])
+
+        :ok
+
+      {:ok, 0} ->
+        {:error, :not_found}
+    end
   end
 
   defp connect() do
