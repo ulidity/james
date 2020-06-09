@@ -27,6 +27,8 @@ defmodule James.Session do
 
   require Logger
 
+  @parse_mode "MarkdownV2"
+
   @state_awaiting_command :awaiting_command
   @state_awaiting_reminder_title :awaiting_reminder_title
   @state_awaiting_reminder_timeout :awaiting_reminder_timeout
@@ -63,12 +65,12 @@ defmodule James.Session do
             {:next_state, next_state, set_timer(new_context)}
 
           {:error, :not_applicable} ->
-            :ok = send_message(:internal, self(), "COMMAND_NOT_APPLICABLE", lang)
+            :ok = send_message(:internal, self(), James.Text.Codes.command_not_applicable(), lang)
             {:next_state, state, set_timer(context)}
         end
 
       false ->
-        :ok = send_message(:internal, self(), "NOT_A_COMMAND", lang)
+        :ok = send_message(:internal, self(), James.Text.Codes.invalid_command(), lang)
         new_context = %Context{context | reminder: Reminder.empty()}
         {:next_state, state, set_timer(new_context)}
     end
@@ -89,12 +91,12 @@ defmodule James.Session do
             {:next_state, next_state, set_timer(new_context)}
 
           {:error, :not_applicable} ->
-            :ok = send_message(:internal, self(), "COMMAND_NOT_APPLICABLE", lang)
+            :ok = send_message(:internal, self(), James.Text.Codes.command_not_applicable(), lang)
             {:next_state, state, set_timer(context)}
         end
 
       false ->
-        :ok = send_message(:internal, self(), "ENTER_REMINDER_TIMEOUT", lang)
+        :ok = send_message(:internal, self(), James.Text.Codes.enter_reminder_timeout(), lang)
         updated_reminder = Reminder.with_title(context.reminder, msg)
         new_context = %Context{context | reminder: updated_reminder}
         {:next_state, @state_awaiting_reminder_timeout, set_timer(new_context)}
@@ -116,20 +118,22 @@ defmodule James.Session do
             {:next_state, next_state, set_timer(new_context)}
 
           {:error, :not_applicable} ->
-            :ok = send_message(:internal, self(), "COMMAND_NOT_APPLICABLE", lang)
+            :ok = send_message(:internal, self(), James.Text.Codes.command_not_applicable(), lang)
             {:next_state, state, set_timer(context)}
         end
 
       false ->
         case get_timeout(msg) do
           {:ok, timeout} ->
-            :ok = send_message(:internal, self(), "REMINDER_CREATED", lang)
+            :ok = send_message(:internal, self(), James.Text.Codes.reminder_created(), lang)
             updated_reminder = Reminder.with_timeout(context.reminder, timeout)
-            :ok = Reminder.Storage.set_reminder(updated_reminder, context.chat_id)
+            :ok = Reminder.Storage.set_reminder(updated_reminder, context.chat_id, lang)
             {:next_state, @state_awaiting_command, %Context{context | reminder: Reminder.empty()}}
 
           :error ->
-            :ok = send_message(:internal, self(), "INVALID_REMINDER_TIMEOUT", lang)
+            :ok =
+              send_message(:internal, self(), James.Text.Codes.invalid_reminder_timeout(), lang)
+
             {:next_state, state, set_timer(context)}
         end
     end
@@ -183,7 +187,13 @@ defmodule James.Session do
   defp do_send_message(conn, chat_id, msg, lang) do
     {:ok, msg} = Text.message(msg, lang)
 
-    body = %{"chat_id" => chat_id, "text" => msg} |> Jason.encode!()
+    body =
+      %{
+        "chat_id" => chat_id,
+        "text" => msg,
+        "parse_mode" => @parse_mode
+      }
+      |> Jason.encode!()
 
     {:ok, new_conn, _req_ref} =
       Mint.HTTP.request(
@@ -224,7 +234,7 @@ defmodule James.Session do
 
   defp process_command(@command_start = command, state) do
     if command in @applicable_commands[state] do
-      {:ok, @state_awaiting_command, "WELCOME"}
+      {:ok, @state_awaiting_command, James.Text.Codes.welcome()}
     else
       {:error, :not_applicable}
     end
@@ -232,7 +242,7 @@ defmodule James.Session do
 
   defp process_command(@command_new = command, state) do
     if command in @applicable_commands[state] do
-      {:ok, @state_awaiting_reminder_title, "ENTER_REMINDER_TITLE"}
+      {:ok, @state_awaiting_reminder_title, James.Text.Codes.enter_reminder_title()}
     else
       {:error, :not_applicable}
     end
@@ -240,7 +250,7 @@ defmodule James.Session do
 
   defp process_command(@command_cancel = command, state) do
     if command in @applicable_commands[state] do
-      {:ok, @state_awaiting_command, "REMINDER_CREATION_CANCELED"}
+      {:ok, @state_awaiting_command, James.Text.Codes.command_canceled()}
     else
       {:error, :not_applicable}
     end

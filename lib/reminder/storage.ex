@@ -23,6 +23,10 @@ defmodule James.Reminder.Storage do
 
   @events_channel "__keyevent*__:expired"
 
+  @key_reminder "reminder"
+  @key_chat_id "chat_id"
+  @key_lang "lang"
+
   def start_link([]) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
@@ -34,20 +38,28 @@ defmodule James.Reminder.Storage do
     {:ok, State.new(conn, pubsub)}
   end
 
-  def set_reminder(reminder, chat_id) do
-    :ok = GenServer.call(__MODULE__, {:set_reminder, reminder, chat_id})
+  def set_reminder(reminder, chat_id, lang) do
+    :ok = GenServer.call(__MODULE__, {:set_reminder, reminder, chat_id, lang})
   end
 
-  def handle_call({:set_reminder, reminder, chat_id}, _from, state) do
-    do_set_reminder(state.conn, reminder, chat_id)
+  def handle_call({:set_reminder, reminder, chat_id, lang}, _from, state) do
+    do_set_reminder(state.conn, reminder, chat_id, lang)
     {:reply, :ok, state}
   end
 
   def handle_info({:redix_pubsub, _pubsub, _ref, :pmessage, %{payload: id}}, state) do
     Logger.info("Reminder #{inspect(id)} fired")
-    {:ok, title, chat_id} = get_reminder(state.conn, id)
-    Logger.debug("Rimnder #{title} for chat #{chat_id} retreived")
-    :ok = Session.send_message(:external, chat_id, {"REMINDER", %{title: title}}, "en")
+    {:ok, reminder, chat_id, lang} = get_reminder(state.conn, id)
+    Logger.debug("Rimnder #{reminder} for chat #{chat_id} retreived")
+
+    :ok =
+      Session.send_message(
+        :external,
+        chat_id,
+        {James.Text.Codes.reminder(), [reminder: reminder]},
+        lang
+      )
+
     {:noreply, state}
   end
 
@@ -56,21 +68,23 @@ defmodule James.Reminder.Storage do
     {:noreply, state}
   end
 
-  defp do_set_reminder(conn, reminder, chat_id) do
+  defp do_set_reminder(conn, reminder, chat_id, lang) do
     id = Ulid.generate()
 
     Logger.debug("Setting reminder #{reminder.title} for #{reminder.timeout} seconds. ID: #{id}")
 
-    {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:title", reminder.title])
-    {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:chat_id", chat_id])
+    {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:#{@key_reminder}", reminder.title])
+    {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:#{@key_chat_id}", chat_id])
+    {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:#{@key_lang}", lang])
     {:ok, "OK"} = Redix.command(conn, ["SETEX", id, reminder.timeout, ""])
   end
 
   defp get_reminder(conn, id) do
-    {:ok, title} = Redix.command(conn, ["GET", "#{id}:title"])
-    {:ok, chat_id} = Redix.command(conn, ["GET", "#{id}:chat_id"])
+    {:ok, reminder} = Redix.command(conn, ["GET", "#{id}:#{@key_reminder}"])
+    {:ok, chat_id} = Redix.command(conn, ["GET", "#{id}:#{@key_chat_id}"])
+    {:ok, lang} = Redix.command(conn, ["GET", "#{id}:#{@key_lang}"])
 
-    {:ok, title, chat_id}
+    {:ok, reminder, chat_id, lang}
   end
 
   defp connect() do

@@ -8,26 +8,13 @@ defmodule James.Text do
       import unquote(__MODULE__), only: [defmsg: 2]
       @before_compile unquote(__MODULE__)
 
-      @messages [
-        :WELCOME,
-        :INVALID_MESSAGE_TYPE,
-        :INVALID_COMMAND,
-        :COMMAND_CANCELED,
-        :ENTER_REMINDER_TITLE,
-        :ENTER_REMINDER_TIMEOUT,
-        :INVALID_REMINDER_TIMEOUT,
-        :COMMAND_NOT_APPLICABLE,
-        :REMINDER_CREATED,
-        :REMINDER
-      ]
-
       def message(code, data \\ [])
     end
   end
 
   defmacro __before_compile__(env) do
     defined_messages = Module.get_attribute(env.module, :message)
-    required_messages = Module.get_attribute(env.module, :messages)
+    required_messages = James.Text.codes()
 
     diff = required_messages -- defined_messages
 
@@ -52,6 +39,40 @@ defmodule James.Text do
     end
   end
 
+  defmacro defcodes() do
+    for code <- __MODULE__.codes() do
+      function =
+        code
+        |> Atom.to_string()
+        |> String.downcase()
+        |> String.to_atom()
+
+      code =
+        code
+        |> Atom.to_string()
+        |> String.upcase()
+        |> String.to_atom()
+
+      quote do
+        def unquote(function)(), do: unquote(code)
+      end
+    end
+  end
+
+  def codes,
+    do: [
+      :WELCOME,
+      :INVALID_MESSAGE_TYPE,
+      :INVALID_COMMAND,
+      :COMMAND_CANCELED,
+      :ENTER_REMINDER_TITLE,
+      :ENTER_REMINDER_TIMEOUT,
+      :INVALID_REMINDER_TIMEOUT,
+      :COMMAND_NOT_APPLICABLE,
+      :REMINDER_CREATED,
+      :REMINDER
+    ]
+
   def message({code, data}, lang) do
     mod = get_mod(lang)
 
@@ -67,4 +88,10 @@ defmodule James.Text do
   def get_mod("en"), do: EN
   def get_mod("ru"), do: RU
   def get_mod(_), do: EN
+end
+
+defmodule James.Text.Codes do
+  require James.Text
+
+  James.Text.defcodes()
 end

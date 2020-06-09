@@ -29,7 +29,7 @@ defmodule James.Message do
           Session.send_message(
             :external,
             chat_id,
-            "WRONG_MESSAGE_TYPE",
+            James.Text.Codes.invalid_message_type(),
             lang
           )
     end
