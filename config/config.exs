@@ -16,4 +16,5 @@ config :james,
   http_port: {:system, :integer, "JAMES_HTTP_PORT", 80},
   session_timeout: {:system, :integer, "JAMES_SESSION_TIMEOUT", 60_000},
   db_host: {:system, :string, "JAMES_DB_HOST"},
-  db_port: {:system, :integer, "JAMES_DB_PORT"}
+  db_port: {:system, :integer, "JAMES_DB_PORT"},
+  reminder_retrigger_interval: {:system, :integer, "JAMES_REMINDER_RETRIGGER_INTERVAL", 60}

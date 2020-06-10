@@ -46,13 +46,13 @@ defmodule James.Text.EN do
 
   defmsg(:REMINDER_COMPLETED, [
     """
-    Задача выполнена
+    Reminder completed
     """
   ])
 
   defmsg(:REMINDER_ALREADY_COMPLETED, [
     """
-    Задача уже была выполнена
+    Reminder already completed
     """
   ])
 

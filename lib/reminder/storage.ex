@@ -47,7 +47,7 @@ defmodule James.Reminder.Storage do
   end
 
   def handle_call({:set_reminder, reminder, chat_id, lang}, _from, state) do
-    do_set_reminder(state.conn, reminder, chat_id, lang)
+    :ok = do_set_reminder(state.conn, reminder, chat_id, lang)
     {:reply, :ok, state}
   end
 
@@ -63,6 +63,7 @@ defmodule James.Reminder.Storage do
 
   def handle_info({:redix_pubsub, _pubsub, _ref, :pmessage, %{payload: id}}, state) do
     Logger.info("Reminder #{inspect(id)} fired")
+    :ok = reset_reminder(state.conn, id)
     {:ok, reminder, chat_id, lang} = get_reminder(state.conn, id)
     Logger.debug("Rimnder #{reminder} for chat #{chat_id} retreived")
 
@@ -92,6 +93,17 @@ defmodule James.Reminder.Storage do
     {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:#{@key_chat_id}", chat_id])
     {:ok, "OK"} = Redix.command(conn, ["SET", "#{id}:#{@key_lang}", lang])
     {:ok, "OK"} = Redix.command(conn, ["SETEX", id, reminder.timeout, ""])
+
+    :ok
+  end
+
+  defp reset_reminder(conn, reminder_id) do
+    Logger.debug("Resetting reminder #{reminder_id}")
+    {:ok, retrigger_interval} = Confex.fetch_env(:james, :reminder_retrigger_interval)
+
+    {:ok, "OK"} = Redix.command(conn, ["SETEX", reminder_id, retrigger_interval, ""])
+
+    :ok
   end
 
   defp get_reminder(conn, id) do
